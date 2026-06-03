@@ -332,6 +332,72 @@ body {
   color: rgba(249, 250, 248, 0.35);
 }
 
+/* ─── Legal Pages ───────────────────────────────────────────────── */
+.legal-hero {
+  background: linear-gradient(118deg, #1d2fbc 0%, #1d2fbc 45%, #3070b0 78%, #8acfde 100%);
+  color: var(--light);
+  padding: 130px 28px 60px;
+  text-align: center;
+}
+
+.legal-title {
+  font-family: var(--font-heading);
+  font-size: clamp(2.2rem, 5vw, 3.4rem);
+  font-weight: 900;
+  letter-spacing: -0.5px;
+  color: var(--light);
+  margin-bottom: 12px;
+}
+
+.legal-updated {
+  font-size: 0.9rem;
+  color: rgba(249, 250, 248, 0.6);
+}
+
+.legal {
+  max-width: 760px;
+}
+
+.legal h2 {
+  font-family: var(--font-heading);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--blue-deep);
+  margin: 44px 0 14px;
+}
+
+.legal h3 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--blue-deep);
+  margin: 24px 0 8px;
+}
+
+.legal p {
+  font-size: 1rem;
+  color: var(--muted);
+  line-height: 1.8;
+  margin-bottom: 16px;
+}
+
+.legal ul {
+  margin: 0 0 16px 1.2em;
+  color: var(--muted);
+}
+
+.legal li {
+  font-size: 1rem;
+  line-height: 1.8;
+  margin-bottom: 8px;
+}
+
+.legal a {
+  color: var(--blue);
+  text-decoration: underline;
+}
+
+.legal a:hover { color: var(--blue-dark); }
+
 /* ─── Footer ────────────────────────────────────────────────────── */
 .footer {
   background: var(--blue-deep);
@@ -350,6 +416,22 @@ body {
 }
 
 .footer .logo { color: rgba(249, 250, 248, 0.45); font-size: 0.95rem; }
+
+.footer-meta {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.footer-link {
+  font-size: 0.82rem;
+  color: rgba(249, 250, 248, 0.45);
+  text-decoration: none;
+}
+
+.footer-link:hover { color: rgba(249, 250, 248, 0.8); }
 
 .footer-copy {
   font-size: 0.82rem;
