@@ -398,6 +398,24 @@ body {
 
 .legal a:hover { color: var(--blue-dark); }
 
+.legal-summary {
+  background: var(--light);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--ice);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  padding: 24px 28px;
+  margin-bottom: 40px;
+}
+
+.legal-summary h2 {
+  font-size: 1.1rem;
+  margin: 0 0 12px;
+}
+
+.legal-summary ul { margin-bottom: 0; }
+
+.legal-summary li { margin-bottom: 6px; }
+
 /* ─── Footer ────────────────────────────────────────────────────── */
 .footer {
   background: var(--blue-deep);
