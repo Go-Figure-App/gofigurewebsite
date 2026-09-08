@@ -238,7 +238,28 @@ module.exports = async function handler(req, res) {
     // (list.double_optin in the API reports false even then, so it cannot be trusted.) Read
     // the status back off the response rather than assuming NEW_MEMBER_STATUS held.
     const member = await upsert.json().catch(() => ({}));
-    const memberStatus = member.status || '';
+    let memberStatus = member.status || '';
+
+    // Mailchimp sometimes creates the contact as 'pending' even though we asked for
+    // 'subscribed' and the audience reports double_optin: false. 'pending' means the contact
+    // has never confirmed and has never unsubscribed, so promoting them is exactly the single
+    // opt-in the consent checkbox authorizes — and it is the only status we promote, which is
+    // what keeps a past 'unsubscribed' or 'cleaned' untouched.
+    if (memberStatus === 'pending') {
+      const promote = await fetch(`${base}/lists/${audienceId}/members/${hash}`, {
+        method: 'PATCH',
+        headers: { Authorization: auth, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'subscribed' }),
+      });
+      if (promote.ok) {
+        const promoted = await promote.json().catch(() => ({}));
+        memberStatus = promoted.status || memberStatus;
+      } else {
+        // Not fatal: they are on the list as pending and Mailchimp will have sent them a
+        // confirmation link, so the browser is told to expect it rather than told they're in.
+        console.error('Could not promote pending to subscribed:', promote.status, await promote.text());
+      }
+    }
 
     // Tags passed in a PUT body are only honored when the member is created, so repeat
     // submitters need this separate call to stay tagged correctly.
