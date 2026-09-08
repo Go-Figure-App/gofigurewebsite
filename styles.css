@@ -510,6 +510,185 @@ body {
   color: rgba(255, 255, 255, 0.55);
 }
 
+.cta-note a {
+  color: rgba(255, 255, 255, 0.8);
+  text-decoration: underline;
+}
+
+.cta-note a:hover { color: #ffffff; }
+
+/* ─── Tester Signup Form ────────────────────────────────────────── */
+.signup-form {
+  max-width: 480px;
+  margin: 0 auto;
+  text-align: left;
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.field { margin-bottom: 14px; }
+
+.field label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 6px;
+}
+
+.field .req { color: var(--bg-accent-muted); }
+
+.field input,
+.field select {
+  width: 100%;
+  padding: 13px 14px;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.10);
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  border-radius: var(--radius);
+  transition: background 0.18s, border-color 0.18s;
+}
+
+.field input::placeholder { color: rgba(255, 255, 255, 0.45); }
+
+.field input:hover,
+.field select:hover { border-color: rgba(255, 255, 255, 0.32); }
+
+.field input:focus-visible,
+.field select:focus-visible {
+  outline: none;
+  background: rgba(255, 255, 255, 0.16);
+  border-color: var(--bg-accent-muted);
+}
+
+/* Native dropdown menus render on a white sheet, so the options need dark text. */
+.field select option { color: var(--fg-primary); background: #ffffff; }
+
+/* Honeypot — hidden from people without display:none, which some bots skip. */
+.hp {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+/* Consent checkbox — the affirmative opt-in that lets us skip email confirmation. */
+.consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  margin: 4px 0 18px;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 2px solid rgba(255, 255, 255, 0.14);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 0.18s, border-color 0.18s;
+}
+
+.consent:hover { border-color: rgba(255, 255, 255, 0.3); }
+
+.consent:has(input:checked) {
+  background: rgba(210, 163, 45, 0.14);
+  border-color: var(--bg-accent-muted);
+}
+
+.consent:has(input:focus-visible) { border-color: var(--bg-accent-muted); }
+
+.consent input {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  accent-color: var(--bg-accent);
+  cursor: pointer;
+}
+
+.consent span {
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.form-submit {
+  width: 100%;
+  margin-top: 8px;
+  border: 2px solid var(--bg-accent);
+}
+
+/* Visible only to screen readers — explains why the submit button is off. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Off until email is filled in and the consent box is ticked — reads as inactive, not as a hover state. */
+.form-submit:disabled {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.45);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.form-submit:disabled:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow: none;
+}
+
+.form-consent {
+  margin-top: 14px;
+  font-size: 0.78rem;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.5);
+  text-align: center;
+}
+
+.form-consent a {
+  color: rgba(255, 255, 255, 0.72);
+  text-decoration: underline;
+}
+
+.form-consent a:hover { color: #ffffff; }
+
+.form-status {
+  margin-top: 12px;
+  font-size: 0.88rem;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.form-status:empty { margin-top: 0; }
+
+.form-status.is-error { color: #FFC9B8; }
+
+.form-done {
+  padding: 26px 24px;
+  font-size: 1.05rem;
+  line-height: 1.7;
+  color: #ffffff;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.10);
+  border-radius: var(--radius-lg);
+}
+
 /* ─── Legal Pages ───────────────────────────────────────────────── */
 .legal-hero {
   background: var(--gradient-splash);
@@ -667,6 +846,8 @@ body {
   .pain-grid { grid-template-columns: 1fr; }
 
   .nav-inner { padding: 0 20px; }
+
+  .field-row { grid-template-columns: 1fr; gap: 0; }
 
   .footer-inner { flex-direction: column; text-align: center; }
 

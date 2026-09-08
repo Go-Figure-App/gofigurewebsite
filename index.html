@@ -127,10 +127,142 @@
         <p class="cta-sub">
           Go Figure is built by skaters, for skaters, using technology to take the guesswork out of a complicated sport and keep more people on the ice, longer. We're in beta now and would love your help shaping it.
         </p>
-        <a href="mailto:contact@gofigureapp.io" class="btn btn-ice btn-lg">
-          contact@gofigureapp.io
-        </a>
-        <p class="cta-note">Or just shoot us an email. We read every one.</p>
+        <form class="signup-form" id="tester-form" novalidate>
+          <div class="field-row">
+            <div class="field">
+              <label for="firstName">First name</label>
+              <input type="text" id="firstName" name="firstName" autocomplete="given-name" />
+            </div>
+            <div class="field">
+              <label for="lastName">Last name</label>
+              <input type="text" id="lastName" name="lastName" autocomplete="family-name" />
+            </div>
+          </div>
+          <div class="field">
+            <label for="email">Email <span class="req">*</span></label>
+            <input type="email" id="email" name="email" autocomplete="email" required />
+          </div>
+          <div class="field">
+            <label for="role">I'm a…</label>
+            <select id="role" name="role">
+              <option value="Coach">Coach</option>
+              <option value="Parent of Skater" selected>Parent of a skater</option>
+              <option value="Adult Skater (18+)">Adult skater (18+)</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+
+          <!-- Honeypot: hidden from people, catnip for bots. Leave empty. -->
+          <div class="hp" aria-hidden="true">
+            <label for="company">Company</label>
+            <input type="text" id="company" name="company" tabindex="-1" autocomplete="off" />
+          </div>
+
+          <label class="consent" for="consent">
+            <input type="checkbox" id="consent" name="consent" />
+            <span id="consent-text">
+              Yes, email me about Go Figure tester access and product updates. I can
+              unsubscribe anytime.
+            </span>
+          </label>
+
+          <p id="submit-req" class="sr-only">
+            Enter your email address and tick the box above to enable this button.
+          </p>
+          <button type="submit" class="btn btn-ice btn-lg form-submit" id="tester-submit"
+                  disabled aria-describedby="submit-req consent-text">
+            Get Tester Access
+          </button>
+          <p class="form-consent">
+            We'll never sell your information. See our <a href="/privacy">Privacy Policy</a>.
+          </p>
+          <p class="form-status" id="tester-status" role="status" aria-live="polite"></p>
+        </form>
+        <p class="cta-note">
+          Or just shoot us an email at
+          <a href="mailto:contact@gofigureapp.io">contact@gofigureapp.io</a>. We read every one.
+        </p>
+
+        <script>
+          (function () {
+            var form = document.getElementById('tester-form');
+            var button = document.getElementById('tester-submit');
+            var status = document.getElementById('tester-status');
+            var consent = document.getElementById('consent');
+
+            // The button ships disabled in the markup, so it stays off if this script
+            // never runs rather than letting someone submit without consenting.
+            // Only email and consent gate it; every other field is optional.
+            function syncButton() {
+              button.disabled = !consent.checked || !form.email.value.trim();
+            }
+            consent.addEventListener('change', syncButton);
+            form.email.addEventListener('input', syncButton);
+            syncButton(); // covers a browser restoring values on back/refresh
+
+            form.addEventListener('submit', function (event) {
+              event.preventDefault();
+
+              var data = {
+                firstName: form.firstName.value,
+                lastName: form.lastName.value,
+                email: form.email.value,
+                role: form.role.value,
+                consent: form.consent.checked,
+                company: form.company.value
+              };
+
+              // Same test the server runs, so the two can't disagree about what's valid.
+              if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(data.email.trim())) {
+                status.textContent = 'Please enter a valid email address.';
+                status.className = 'form-status is-error';
+                form.email.focus();
+                return;
+              }
+
+              if (!data.consent) {
+                status.textContent =
+                  'Please tick the box to confirm you\u2019d like to receive email from us.';
+                status.className = 'form-status is-error';
+                form.consent.focus();
+                return;
+              }
+
+              button.disabled = true;
+              button.textContent = 'Adding you…';
+              status.textContent = '';
+              status.className = 'form-status';
+
+              fetch('/api/subscribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+              })
+                .then(function (response) {
+                  return response.json().then(function (body) {
+                    return { ok: response.ok, body: body };
+                  });
+                })
+                .then(function (result) {
+                  if (!result.ok || !result.body.ok) {
+                    throw new Error(result.body.error || 'Something went wrong.');
+                  }
+                  form.innerHTML =
+                    '<p class="form-done">' +
+                    (result.body.pending
+                      ? "You're almost in — check your inbox for a confirmation link."
+                      : "You're on the list. We'll be in touch soon.") +
+                    '</p>';
+                })
+                .catch(function (error) {
+                  button.textContent = 'Get Tester Access';
+                  syncButton();
+                  status.textContent = error.message;
+                  status.className = 'form-status is-error';
+                });
+            });
+          })();
+        </script>
       </div>
     </section>
 
