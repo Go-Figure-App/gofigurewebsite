@@ -53,6 +53,14 @@ function looksLikeEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value);
 }
 
+/**
+ * Mailchimp rejects ISO 8601 here ("This value is not a valid datetime") — it wants
+ * 'YYYY-MM-DD HH:MM:SS' in UTC, with no 'T', no milliseconds and no 'Z'.
+ */
+function mailchimpTimestamp(date) {
+  return date.toISOString().slice(0, 19).replace('T', ' ');
+}
+
 /** First entry of x-forwarded-for is the real client on Vercel; the rest are proxies. */
 function clientIp(req) {
   const forwarded = req.headers['x-forwarded-for'];
@@ -159,7 +167,7 @@ module.exports = async function handler(req, res) {
     const payload = {
       email_address: email,
       status_if_new: NEW_MEMBER_STATUS,
-      timestamp_signup: new Date().toISOString(),
+      timestamp_signup: mailchimpTimestamp(new Date()),
       merge_fields: {
         FNAME: firstName,
         LNAME: lastName,
@@ -205,7 +213,10 @@ module.exports = async function handler(req, res) {
           error: `This address can't be re-added automatically. Email us at ${CONTACT_EMAIL} and we'll sort it out.`,
         });
       }
-      if (/Invalid Resource|looks fake or invalid/i.test(detail)) {
+      // Only blame the address when Mailchimp actually blamed the address. 'Invalid Resource'
+      // on its own is its generic 400 for any field, so matching it alone told people their
+      // good email was bad when the real fault was ours.
+      if (/looks fake or invalid/i.test(detail) || /"field"\s*:\s*"email_address"/i.test(detail)) {
         return res.status(400).json({
           ok: false,
           error: 'Please double-check that email address.',
