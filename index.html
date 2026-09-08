@@ -247,12 +247,17 @@
                   if (!result.ok || !result.body.ok) {
                     throw new Error(result.body.error || 'Something went wrong.');
                   }
-                  form.innerHTML =
-                    '<p class="form-done">' +
-                    (result.body.pending
-                      ? "You're almost in — check your inbox for a confirmation link."
-                      : "You're on the list. We'll be in touch soon.") +
-                    '</p>';
+                  // The status comes from Mailchimp's own response, not from what we asked
+                  // for, so this can't tell someone they're on the list when they're pending.
+                  var message = "You're on the list. We'll be in touch soon.";
+                  if (result.body.blocked) {
+                    message =
+                      'This address is unsubscribed, so we can\'t re-add it from here. ' +
+                      'Email us at contact@gofigureapp.io and we\'ll sort it out.';
+                  } else if (result.body.pending) {
+                    message = "You're almost in — check your inbox for a confirmation link.";
+                  }
+                  form.innerHTML = '<p class="form-done">' + message + '</p>';
                 })
                 .catch(function (error) {
                   button.textContent = 'Get Tester Access';

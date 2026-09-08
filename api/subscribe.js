@@ -27,6 +27,11 @@ const ROLE_MERGE_TAG = 'ROLE';
  * 'subscribed' — added to the list immediately, no confirmation email (requires the
  *                consent checkbox below, which is enforced server-side).
  * 'pending'    — double opt-in: Mailchimp emails a confirmation link first.
+ *
+ * This is only what we ask for. If the audience has double opt-in enabled, Mailchimp
+ * overrides it to 'pending' and the contact stays off the list until they click the
+ * confirmation link — so the status we report to the browser is read back off the
+ * response, never assumed from this constant.
  */
 const NEW_MEMBER_STATUS = 'subscribed';
 
@@ -228,6 +233,13 @@ module.exports = async function handler(req, res) {
       });
     }
 
+    // Mailchimp decides the final status, and it does not always honor status_if_new: an
+    // audience with double opt-in switched on creates the contact as 'pending' regardless.
+    // (list.double_optin in the API reports false even then, so it cannot be trusted.) Read
+    // the status back off the response rather than assuming NEW_MEMBER_STATUS held.
+    const member = await upsert.json().catch(() => ({}));
+    const memberStatus = member.status || '';
+
     // Tags passed in a PUT body are only honored when the member is created, so repeat
     // submitters need this separate call to stay tagged correctly.
     const tagged = await fetch(`${base}/lists/${audienceId}/members/${hash}/tags`, {
@@ -259,7 +271,14 @@ module.exports = async function handler(req, res) {
       console.error('Mailchimp note failed:', noted.status, await noted.text());
     }
 
-    return res.status(200).json({ ok: true, pending: NEW_MEMBER_STATUS === 'pending' });
+    // 'unsubscribed' and 'cleaned' reach here because the PUT omits `status` on purpose, so
+    // a past unsubscribe survives a re-submit. Telling those people they're on the list would
+    // be false, so they get told plainly that they aren't.
+    if (memberStatus === 'unsubscribed' || memberStatus === 'cleaned') {
+      return res.status(200).json({ ok: true, status: memberStatus, blocked: true });
+    }
+
+    return res.status(200).json({ ok: true, status: memberStatus, pending: memberStatus === 'pending' });
   } catch (err) {
     console.error('Mailchimp request threw:', err);
     return res.status(502).json({
