@@ -42,12 +42,45 @@ const NEW_MEMBER_STATUS = 'subscribed';
 const CONSENT_TEXT =
   'Yes, email me about Go Figure tester access and product updates. I can unsubscribe anytime.';
 
+/** Stable prefix so we can recognize a consent note we already wrote and not duplicate it. */
+const CONSENT_NOTE_PREFIX = 'Consent via gofigureapp.io tester form:';
+
 /** Must match the dropdown choices in Mailchimp exactly, or the value is rejected. */
 const ROLES = ['Coach', 'Parent of Skater', 'Adult Skater (18+)', 'Other'];
 
 const CONTACT_EMAIL = 'contact@gofigureapp.io';
 
-/** Cached per warm container so we do the discovery GET once per cold start, not per signup. */
+/**
+ * Origins allowed to POST here. A missing Origin header is allowed through: some clients
+ * omit it on same-origin form posts, and blocking those would cost real signups to stop an
+ * attacker who can trivially omit the header anyway. Rate limiting below is the real defense;
+ * this only turns away casual cross-site abuse.
+ */
+const ALLOWED_ORIGINS = [
+  'https://gofigureapp.io',
+  'https://www.gofigureapp.io',
+  'http://localhost:3000',
+];
+
+/**
+ * Per-IP rate limit. In-memory, so it is per warm container and resets on cold start — it
+ * raises the cost of casual scripted abuse but is NOT a defense against a distributed or
+ * determined attacker. For that, swap `hitRateLimit` for a shared store (Vercel KV / Upstash);
+ * the rest of the handler does not need to change.
+ *
+ * 10 per 10 minutes is far above what a real person does (including retyping a bad address)
+ * and low enough to make bulk list-stuffing tedious. Every request counts toward it, including
+ * honeypot hits and validation failures, so probing is not free.
+ */
+const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
+const RATE_LIMIT_MAX = 10;
+/** Bounds memory if a botnet cycles IPs; oldest entries are dropped first. */
+const RATE_LIMIT_MAX_TRACKED_IPS = 5000;
+
+/** ip -> array of request timestamps inside the current window. */
+const recentRequests = new Map();
+
+/** Cached per warm container. null until a lookup succeeds; then an array, possibly empty. */
 let cachedEmailPermissionIds = null;
 
 function clean(value, maxLength) {
@@ -77,16 +110,61 @@ function clientIp(req) {
 }
 
 /**
+ * Records a request and reports whether this IP is over its limit. An unknown IP is never
+ * limited: every such request would otherwise share one bucket and lock each other out.
+ * Returns 0 when allowed, or the seconds to wait when blocked.
+ */
+function hitRateLimit(ip) {
+  if (!ip) return 0;
+
+  const now = Date.now();
+  const cutoff = now - RATE_LIMIT_WINDOW_MS;
+
+  // Prune expired entries. The map only holds active IPs, so this stays cheap.
+  for (const [key, times] of recentRequests) {
+    const live = times.filter((t) => t > cutoff);
+    if (live.length) recentRequests.set(key, live);
+    else recentRequests.delete(key);
+  }
+
+  // Map iterates in insertion order, so the first key is the least recently added.
+  while (recentRequests.size >= RATE_LIMIT_MAX_TRACKED_IPS) {
+    const oldest = recentRequests.keys().next().value;
+    if (oldest === undefined) break;
+    recentRequests.delete(oldest);
+  }
+
+  const times = recentRequests.get(ip) || [];
+  if (times.length >= RATE_LIMIT_MAX) {
+    return Math.max(1, Math.ceil((times[0] + RATE_LIMIT_WINDOW_MS - now) / 1000));
+  }
+
+  times.push(now);
+  recentRequests.set(ip, times);
+  return 0;
+}
+
+/** True when the Origin header is present and not one of ours. */
+function isDisallowedOrigin(req) {
+  const origin = req.headers.origin;
+  return Boolean(origin) && !ALLOWED_ORIGINS.includes(String(origin));
+}
+
+/**
  * Marketing-permission IDs are per-audience GUIDs that only exist once GDPR fields are
  * switched on, and there is no endpoint that lists them — they show up on member records.
- * So read them off any member. Returns [] when GDPR fields are off, which makes this a
- * no-op until the audience setting is flipped (no redeploy needed).
+ * So read them off any member.
+ *
+ * A successful lookup is cached even when it finds nothing, because the audience currently
+ * has GDPR fields off and re-asking on every signup added a round trip per request for a
+ * result that never changes. The trade: turning those fields on takes effect at the next cold
+ * start rather than the next signup. Failed lookups are not cached, so a blip self-corrects.
  *
  * Only email permissions are returned: the checkbox asks about email, so consenting on the
  * visitor's behalf to any other channel Mailchimp offers would misrepresent what they ticked.
  */
 async function emailPermissionIds(base, auth, audienceId) {
-  if (cachedEmailPermissionIds) return cachedEmailPermissionIds;
+  if (cachedEmailPermissionIds !== null) return cachedEmailPermissionIds;
   try {
     const res = await fetch(
       `${base}/lists/${audienceId}/members?count=1&fields=members.marketing_permissions`,
@@ -99,7 +177,7 @@ async function emailPermissionIds(base, auth, audienceId) {
     const ids = permissions
       .filter((p) => /e-?mail/i.test(p.text || ''))
       .map((p) => p.marketing_permission_id);
-    if (ids.length) cachedEmailPermissionIds = ids;
+    cachedEmailPermissionIds = ids;
     return ids;
   } catch (err) {
     console.error('Could not read marketing permissions:', err);
@@ -107,10 +185,59 @@ async function emailPermissionIds(base, auth, audienceId) {
   }
 }
 
+/**
+ * A contact the PUT just created carries a created_at within seconds of now. Used to skip the
+ * "do they already have a consent note?" lookup on the common path — a first-time signup
+ * cannot have one. If the field is missing or unparseable we fall through to the lookup,
+ * which is correct, just one call slower.
+ */
+function wasJustCreated(member) {
+  const created = Date.parse(member.created_at || '');
+  return Number.isFinite(created) && Date.now() - created < 2 * 60 * 1000;
+}
+
+/**
+ * Whether a consent note is already on file. On a failed lookup this returns false, so we
+ * write a second note rather than risk leaving a re-consent unrecorded — a duplicate note is
+ * the cheaper mistake.
+ */
+async function hasConsentNote(base, auth, audienceId, hash) {
+  try {
+    const res = await fetch(
+      `${base}/lists/${audienceId}/members/${hash}/notes?count=100&fields=notes.note`,
+      { headers: { Authorization: auth } }
+    );
+    if (!res.ok) return false;
+    const json = await res.json();
+    return (json.notes || []).some(
+      (n) => typeof n.note === 'string' && n.note.startsWith(CONSENT_NOTE_PREFIX)
+    );
+  } catch (err) {
+    console.error('Could not read existing notes:', err);
+    return false;
+  }
+}
+
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
     return res.status(405).json({ ok: false, error: 'Method not allowed.' });
+  }
+
+  if (isDisallowedOrigin(req)) {
+    return res.status(403).json({ ok: false, error: 'Forbidden.' });
+  }
+
+  const ip = clientIp(req);
+
+  const retryAfter = hitRateLimit(ip);
+  if (retryAfter) {
+    console.error('Rate limit hit for', ip);
+    res.setHeader('Retry-After', String(retryAfter));
+    return res.status(429).json({
+      ok: false,
+      error: `Too many signups from this connection. Please wait a moment, or email ${CONTACT_EMAIL}.`,
+    });
   }
 
   const body = req.body && typeof req.body === 'object' ? req.body : {};
@@ -161,7 +288,6 @@ module.exports = async function handler(req, res) {
   const base = `https://${datacenter}.api.mailchimp.com/3.0`;
   const auth = `Basic ${Buffer.from(`anystring:${apiKey}`).toString('base64')}`;
   const hash = crypto.createHash('md5').update(email).digest('hex');
-  const ip = clientIp(req);
 
   try {
     const permissionIds = await emailPermissionIds(base, auth, audienceId);
@@ -240,6 +366,14 @@ module.exports = async function handler(req, res) {
     const member = await upsert.json().catch(() => ({}));
     let memberStatus = member.status || '';
 
+    // 'unsubscribed' and 'cleaned' reach here because the PUT omits `status` on purpose, so a
+    // past unsubscribe survives a re-submit. Return before the tag and note writes below:
+    // re-tagging someone we are about to tell we can't add would be writing to a record we
+    // just decided not to touch.
+    if (memberStatus === 'unsubscribed' || memberStatus === 'cleaned') {
+      return res.status(200).json({ ok: true, status: memberStatus, blocked: true });
+    }
+
     // Mailchimp sometimes creates the contact as 'pending' even though we asked for
     // 'subscribed' and the audience reports double_optin: false. 'pending' means the contact
     // has never confirmed and has never unsubscribed, so promoting them is exactly the single
@@ -263,13 +397,18 @@ module.exports = async function handler(req, res) {
 
     // Tags passed in a PUT body are only honored when the member is created, so repeat
     // submitters need this separate call to stay tagged correctly.
+    //
+    // Every role is sent every time — the chosen one active, the rest inactive — because tags
+    // are additive: someone who first signed up as "Parent of Skater" and later re-submits as
+    // "Coach" would otherwise carry both forever and be double-counted in any segment.
+    // Deactivating a tag the member does not have is a no-op.
     const tagged = await fetch(`${base}/lists/${audienceId}/members/${hash}/tags`, {
       method: 'POST',
       headers: { Authorization: auth, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         tags: [
           { name: 'early-tester', status: 'active' },
-          { name: role, status: 'active' },
+          ...ROLES.map((name) => ({ name, status: name === role ? 'active' : 'inactive' })),
         ],
       }),
     });
@@ -279,24 +418,25 @@ module.exports = async function handler(req, res) {
       console.error('Mailchimp tagging failed:', tagged.status, await tagged.text());
     }
 
-    // Records the exact wording consented to, which ip/timestamp alone can't show. Best
-    // effort: a missing note is not a reason to tell someone their signup failed.
-    const noted = await fetch(`${base}/lists/${audienceId}/members/${hash}/notes`, {
-      method: 'POST',
-      headers: { Authorization: auth, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        note: `Consent via gofigureapp.io tester form: "${CONSENT_TEXT}"`.slice(0, 1000),
-      }),
-    });
-    if (!noted.ok) {
-      console.error('Mailchimp note failed:', noted.status, await noted.text());
-    }
+    // Records the exact wording consented to, which ip/timestamp alone can't show. Written
+    // once per contact, not once per submission — but keyed on the note actually being on
+    // file rather than on this being a new contact, so an imported contact with no consent
+    // evidence still gets a real record the first time they fill the form in themselves.
+    // Best effort: a missing note is not a reason to tell someone their signup failed.
+    const needsNote =
+      wasJustCreated(member) || !(await hasConsentNote(base, auth, audienceId, hash));
 
-    // 'unsubscribed' and 'cleaned' reach here because the PUT omits `status` on purpose, so
-    // a past unsubscribe survives a re-submit. Telling those people they're on the list would
-    // be false, so they get told plainly that they aren't.
-    if (memberStatus === 'unsubscribed' || memberStatus === 'cleaned') {
-      return res.status(200).json({ ok: true, status: memberStatus, blocked: true });
+    if (needsNote) {
+      const noted = await fetch(`${base}/lists/${audienceId}/members/${hash}/notes`, {
+        method: 'POST',
+        headers: { Authorization: auth, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          note: `${CONSENT_NOTE_PREFIX} "${CONSENT_TEXT}"`.slice(0, 1000),
+        }),
+      });
+      if (!noted.ok) {
+        console.error('Mailchimp note failed:', noted.status, await noted.text());
+      }
     }
 
     return res.status(200).json({ ok: true, status: memberStatus, pending: memberStatus === 'pending' });

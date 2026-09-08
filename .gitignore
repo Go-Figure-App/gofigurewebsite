@@ -3,3 +3,7 @@ node_modules/
 .env*.local
 .vercel
 .env*
+
+# Internal security notes — this repo is PUBLIC. Anything describing unfixed
+# weaknesses in the app or its infrastructure must not be committed here.
+SECURITY_CHECKLIST.md
