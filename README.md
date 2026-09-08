@@ -6,10 +6,17 @@ framework. Deployed on Vercel.
 
 The iOS app itself lives in a separate repository.
 
-## ⚠️ This repository is public, and everything in it is served
+## ⚠️ This repository is public, and most of it is served
 
-There is no build step, so **every tracked file is reachable at a public URL**. A file
-committed at `context/notes.md` is downloadable at `gofigureapp.io/context/notes.md`.
+There is no build step. Vercel skips a known set of root-level files — `README.md`,
+`package.json`, lockfiles, `vercel.json`, dotfiles — and compiles `api/` into functions
+rather than serving the source. **Everything else is served verbatim**, including
+arbitrary files in subdirectories.
+
+That exclusion list is implicit and easy to over-trust. It is why `README.md` is not
+downloadable but `context/business-overview.md` was, at
+`gofigureapp.io/context/business-overview.md`, until it was removed. Adding a directory
+nobody thought about publishes its contents with no warning and no signal.
 
 Before adding a file, ask whether you would publish it on the website. If the answer is
 no, it belongs in the private app repository or in Notion — not here. That includes:
