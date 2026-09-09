@@ -48,7 +48,7 @@
      * results incomparable. Sent to Mailchimp so a segment can tell "took v1" from
      * "took v2" instead of silently mixing two different quizzes together.
      */
-    version: 2,
+    version: 1,
 
     banner: {
       /* The whole banner is the tappable CTA; this is the text inside it. */
