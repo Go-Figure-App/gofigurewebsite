@@ -1232,13 +1232,6 @@ body.quiz-open {
   margin-bottom: 20px;
 }
 
-.quiz-optional {
-  font-weight: 600;
-  letter-spacing: 0.4px;
-  text-transform: none;
-  color: rgba(255, 255, 255, 0.45);
-}
-
 .quiz-submit {
   width: 100%;
   margin-top: 4px;
@@ -1306,6 +1299,21 @@ body.quiz-open {
   font-size: 1.02rem;
   line-height: 1.7;
   color: rgba(255, 255, 255, 0.82);
+}
+
+.quiz-result-desc + .quiz-result-desc { margin-top: 14px; }
+
+/* The Go Figure pitch is set apart from the personality read-out above it, so it reads as a
+   distinct "here's how we help" beat rather than a third paragraph of the same description. */
+.quiz-result-tiein {
+  margin-top: 20px;
+  padding: 16px 18px;
+  font-size: 0.95rem;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.86);
+  background: rgba(255, 255, 255, 0.06);
+  border-left: 3px solid var(--bg-accent-muted);
+  border-radius: var(--radius);
 }
 
 /* The result is on screen before this resolves, so a Mailchimp failure never costs the

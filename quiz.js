@@ -1,7 +1,7 @@
 /**
  * quiz.js — the "What type of skating parent are you?" banner and full-screen quiz.
  *
- * Every string, question, weight and Mailchimp tag comes from quiz-config.js. Nothing in this
+ * Every string, question, result and Mailchimp tag comes from quiz-config.js. Nothing in this
  * file needs editing to change copy, add a question or add an archetype.
  *
  * Builds its own DOM rather than expecting markup in the page, so each HTML file only needs the
@@ -89,7 +89,8 @@
       CONTACT_KEY,
       JSON.stringify({
         email: contact.email,
-        name: contact.name || '',
+        firstName: contact.firstName || '',
+        lastName: contact.lastName || '',
         consentedAt: new Date().toISOString()
       })
     );
@@ -490,7 +491,8 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         answers: state.answers,
-        name: contact.name || '',
+        firstName: contact.firstName || '',
+        lastName: contact.lastName || '',
         email: contact.email,
         consent: true,
         company: contact.company || '' // honeypot; empty for a remembered taker
@@ -595,11 +597,18 @@
       text: QUIZ.form.title
     });
 
-    var nameInput = el('input', {
+    var firstNameInput = el('input', {
       type: 'text',
-      id: 'quiz-name',
-      name: 'name',
-      autocomplete: 'name'
+      id: 'quiz-first-name',
+      name: 'firstName',
+      autocomplete: 'given-name'
+    });
+
+    var lastNameInput = el('input', {
+      type: 'text',
+      id: 'quiz-last-name',
+      name: 'lastName',
+      autocomplete: 'family-name'
     });
 
     var emailInput = el('input', {
@@ -637,8 +646,8 @@
       text: QUIZ.form.submitLabel
     });
 
-    // Email + consent gate the button; name is optional. It ships disabled and is only switched
-    // on here, so it stays off if anything above throws.
+    // Email + consent gate the button; first/last name are optional. It ships disabled and is
+    // only switched on here, so it stays off if anything above throws.
     function syncSubmit() {
       submitButton.disabled = !consentInput.checked || !emailInput.value.trim();
     }
@@ -669,16 +678,22 @@
         // nothing but a retry button.
         scoreNow();
         state.screen = 'result';
-        submit({ name: nameInput.value.trim(), email: email, company: honeypot.value });
+        submit({
+          firstName: firstNameInput.value.trim(),
+          lastName: lastNameInput.value.trim(),
+          email: email,
+          company: honeypot.value
+        });
       }
     }, [
       el('p', { class: 'quiz-form-sub', text: QUIZ.form.subtitle }),
       el('div', { class: 'field' }, [
-        el('label', { for: 'quiz-name' }, [
-          QUIZ.form.nameLabel,
-          el('span', { class: 'quiz-optional', text: ' (' + QUIZ.form.nameOptionalHint + ')' })
-        ]),
-        nameInput
+        el('label', { for: 'quiz-first-name', text: QUIZ.form.firstNameLabel }),
+        firstNameInput
+      ]),
+      el('div', { class: 'field' }, [
+        el('label', { for: 'quiz-last-name', text: QUIZ.form.lastNameLabel }),
+        lastNameInput
       ]),
       el('div', { class: 'field' }, [
         el('label', { for: 'quiz-email' }, [
@@ -747,6 +762,13 @@
       ]);
     }
 
+    var bodyParagraphs = String(result.body || '')
+      .split(/\n\n+/)
+      .filter(Boolean)
+      .map(function (paragraph) {
+        return el('p', { class: 'quiz-result-desc', text: paragraph });
+      });
+
     return [
       el('p', { class: 'quiz-result-eyebrow', text: STRINGS.resultEyebrow }),
       el('h2', {
@@ -755,7 +777,10 @@
         tabindex: '-1',
         text: result.title
       }),
-      el('p', { class: 'quiz-result-desc', text: result.description }),
+      el('div', { class: 'quiz-result-body' }, bodyParagraphs),
+      result.goFigureTieIn
+        ? el('p', { class: 'quiz-result-tiein', text: result.goFigureTieIn })
+        : null,
       note,
       el('div', { class: 'quiz-result-actions' }, [
         el('button', {

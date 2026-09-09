@@ -147,19 +147,14 @@ async function hasConsentNote(base, auth, audienceId, hash) {
 }
 
 /**
- * Splits the single free-text Name field into Mailchimp's two. First whitespace-delimited token
- * is the first name, the remainder is the last name — good enough for a greeting, and better
- * than dropping the name entirely to avoid guessing. Returns {} for an empty input so we never
- * blank out a name already on file.
+ * Builds Mailchimp's name merge fields from the form's separate first/last inputs. Only sets a
+ * key that actually has a value, so an empty field never blanks out a name already on file.
  */
-function splitName(name) {
-  if (!name) return {};
-  const parts = name.split(/\s+/).filter(Boolean);
-  if (!parts.length) return {};
-  return {
-    [MERGE_FIRST_NAME]: parts[0].slice(0, 100),
-    [MERGE_LAST_NAME]: parts.slice(1).join(' ').slice(0, 100),
-  };
+function nameFields(firstName, lastName) {
+  const fields = {};
+  if (firstName) fields[MERGE_FIRST_NAME] = firstName;
+  if (lastName) fields[MERGE_LAST_NAME] = lastName;
+  return fields;
 }
 
 /**
@@ -226,7 +221,8 @@ module.exports = async function handler(req, res) {
   }
 
   const email = clean(body.email, 200).toLowerCase();
-  const name = clean(body.name, 200);
+  const firstName = clean(body.firstName, 100);
+  const lastName = clean(body.lastName, 100);
   const answers = Array.isArray(body.answers) ? body.answers.map((a) => clean(a, 60)) : [];
 
   if (!looksLikeEmail(email)) {
@@ -279,7 +275,7 @@ module.exports = async function handler(req, res) {
     // record the signup: if the upsert complains, we retry with `baseMerge` only.
     const baseMerge = Object.assign(
       {},
-      splitName(name),
+      nameFields(firstName, lastName),
       applyRole(existingMerge)
     );
 
