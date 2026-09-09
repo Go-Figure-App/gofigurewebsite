@@ -116,6 +116,22 @@
             <p>Follow your young skater's journey, understand what each level asks for, and celebrate their milestones along the way.</p>
           </div>
         </div>
+
+        <!-- Permanent entry point for the skating-parent quiz. The sticky banner is
+             dismissable and only lasts a session, so this is what a returning visitor sees.
+             It sits under the "Parents — Coming soon" card on purpose: that card names the
+             quiz's exact audience and otherwise gives them nothing to act on.
+
+             This copy is page content, so it lives here alongside the rest of the homepage.
+             Everything *inside* the quiz — questions, results, tags — comes from
+             quiz-config.js. The href is the no-JS fallback; quiz.js intercepts the click. -->
+        <div class="quiz-cta">
+          <div class="quiz-cta-copy">
+            <h3 class="quiz-cta-title">What type of skating parent are you?</h3>
+            <p class="quiz-cta-sub">Two questions, about 30 seconds. Be first to know when the parent experience is ready.</p>
+          </div>
+          <a href="?quiz=open" class="btn btn-ice quiz-cta-btn" data-quiz-open>Take the quiz</a>
+        </div>
       </div>
     </section>
 
@@ -289,5 +305,10 @@
       </div>
     </footer>
 
+
+    <!-- Skating-parent quiz: banner + full-screen quiz, injected into every page.
+         Copy, scoring weights and Mailchimp tags all live in quiz-config.js. -->
+    <script src="/quiz-config.js"></script>
+    <script src="/quiz.js"></script>
   </body>
 </html>

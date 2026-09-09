@@ -6,7 +6,7 @@
   "type": "commonjs",
   "license": "UNLICENSED",
   "scripts": {
-    "dev": "vercel dev"
+    "start": "vercel dev"
   },
   "repository": {
     "type": "git",

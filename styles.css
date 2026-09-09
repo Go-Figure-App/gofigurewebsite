@@ -855,3 +855,524 @@ body {
 
   .section { padding: 72px 24px; }
 }
+
+/* ─── Skating-Parent Quiz ───────────────────────────────────────── */
+/* Banner + full-screen quiz injected by quiz.js. Mobile-first: most traffic here is a QR
+   code scanned at a rink, so every tap target is sized for a thumb and the desktop
+   treatment is the media query at the bottom, not the base case. */
+
+:root {
+  /* Real rendered banner height, published by quiz.js so the fixed nav and the hero can
+     clear it even when the copy wraps to two lines. 0 while the banner is hidden. */
+  --quiz-banner-h: 0px;
+}
+
+/* The nav is position:fixed at top:0; this drops it below the banner when one is showing. */
+.nav { top: var(--quiz-banner-h); }
+
+/* The hero and legal headers pad past the fixed nav. Those paddings were sized for the nav
+   alone, so add the banner's height on top rather than editing the originals. */
+body.has-quiz-banner .hero { padding-top: calc(150px + var(--quiz-banner-h)); }
+body.has-quiz-banner .legal-hero { padding-top: calc(140px + var(--quiz-banner-h)); }
+
+/* ── Banner ── */
+.quiz-banner {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  /* Above the nav's z-index: 100, below the overlay. */
+  z-index: 110;
+  display: flex;
+  align-items: stretch;
+  background: var(--bg-accent);
+  box-shadow: 0 2px 10px rgba(61, 41, 53, 0.22);
+}
+
+/* Required, and not redundant: the `display: flex` above outranks the user-agent rule that
+   makes [hidden] display:none, so without this the dismissed banner stays on screen. */
+.quiz-banner[hidden] { display: none; }
+
+/* The whole strip is the CTA. A <button> rather than a clickable <div> so it is
+   keyboard-reachable and announced as a control without any ARIA. */
+.quiz-banner-cta {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px 10px;
+  min-height: 46px;
+  padding: 9px 8px 9px 16px;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  line-height: 1.35;
+  color: var(--fg-base);
+  text-align: center;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.quiz-banner-cta:hover { background: var(--bg-accent-hover); }
+.quiz-banner-cta:focus-visible {
+  outline: 3px solid var(--fg-base);
+  outline-offset: -3px;
+}
+
+.quiz-banner-text { font-weight: 600; }
+.quiz-banner-action { font-weight: 700; text-decoration: underline; }
+
+.quiz-banner-dismiss {
+  flex-shrink: 0;
+  width: 46px;
+  font-size: 1.35rem;
+  line-height: 1;
+  color: var(--fg-base);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.quiz-banner-dismiss:hover { opacity: 1; }
+.quiz-banner-dismiss:focus-visible {
+  outline: 3px solid var(--fg-base);
+  outline-offset: -3px;
+  opacity: 1;
+}
+
+/* ── Homepage CTA ── */
+/* Lives inside the "Who it's for" section, under the Parents card. Deliberately a band
+   rather than its own section: the page's real closing CTA is the tester form below, and a
+   full 96px section here would read as competing with it. Gold-tinted so it echoes the
+   banner and stands out against the section's flat background without shouting. */
+.quiz-cta {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 28px;
+  padding: 22px 20px;
+  background: rgba(210, 163, 45, 0.12);
+  border: 2px solid rgba(210, 163, 45, 0.34);
+  border-radius: var(--radius-xl);
+  text-align: center;
+}
+
+/* Sized down for phones: at 320px the full-size heading wrapped to three lines and the band
+   ate 60% of the viewport, which is far too much presence for a secondary CTA. */
+.quiz-cta-title {
+  font-family: var(--font-heading);
+  font-size: 1.2rem;
+  font-weight: 400;
+  line-height: 1.25;
+  color: var(--fg-base);
+  margin-bottom: 8px;
+}
+
+.quiz-cta-sub {
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: var(--fg-primary);
+}
+
+/* Full width on phones so it is an unmissable thumb target; shrink-wrapped on desktop. */
+.quiz-cta-btn {
+  align-self: stretch;
+  text-align: center;
+}
+
+@media (min-width: 720px) {
+  .quiz-cta {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 32px;
+    margin-top: 40px;
+    padding: 28px 36px;
+    text-align: left;
+  }
+
+  /* Room to breathe once the band is horizontal. */
+  .quiz-cta-title { font-size: 1.35rem; }
+  .quiz-cta-sub { font-size: 0.95rem; line-height: 1.6; }
+
+  .quiz-cta-btn { align-self: auto; flex-shrink: 0; }
+}
+
+/* ── Page state while the quiz is open ── */
+/* The overlay is meant to be distraction-free, so the nav and the banner go away entirely
+   rather than sitting behind it. */
+body.quiz-open .nav,
+body.quiz-open .quiz-banner { display: none; }
+
+/* position:fixed rather than overflow:hidden — iOS Safari scrolls an overflow-hidden body
+   behind a fixed overlay. quiz.js sets `top` to the saved scroll offset and restores it. */
+body.quiz-open {
+  position: fixed;
+  left: 0;
+  right: 0;
+  width: 100%;
+}
+
+/* ── Overlay shell ── */
+.quiz-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  background: var(--gradient-deep);
+  color: #ffffff;
+  overflow-y: auto;
+  /* The header band below is sized in vw, which excludes the scrollbar; without this a
+     desktop scrollbar would let the page scroll sideways by its width. */
+  overflow-x: hidden;
+  /* Keeps the last option clear of the iPhone home indicator. */
+  padding: 0 0 env(safe-area-inset-bottom);
+}
+
+.quiz-overlay[hidden] { display: none; }
+
+.quiz-shell {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto;
+  padding: 0 20px 32px;
+}
+
+/* ── Header: back / progress / close, plus the progress bar ── */
+.quiz-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: max(14px, env(safe-area-inset-top)) 0 12px;
+}
+
+/* The band behind the header. It lives on a pseudo-element spanning the full viewport width
+   rather than on .quiz-head itself, because .quiz-head sits inside the max-width shell — a
+   background on the element stops at the shell's edge and reads as a floating rectangle on
+   wide screens. The overlay scrolls under this; a solid tint rather than a backdrop blur,
+   which would cost a repaint per scroll frame on low-end phones. */
+.quiz-head::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 100vw;
+  transform: translateX(-50%);
+  background: linear-gradient(#2B1C26 72%, rgba(43, 28, 38, 0));
+  z-index: -1;
+}
+
+.quiz-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+}
+
+.quiz-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 10px;
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.78);
+  background: none;
+  border: 0;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.quiz-nav-btn:hover { color: #ffffff; background: rgba(255, 255, 255, 0.10); }
+.quiz-nav-btn:focus-visible {
+  outline: 2px solid var(--bg-accent-muted);
+  outline-offset: 2px;
+  color: #ffffff;
+}
+
+.quiz-nav-btn[hidden] { display: none; }
+
+/* Keeps the progress label centred when the back button is hidden on question 1. */
+.quiz-back { margin-right: auto; }
+.quiz-close { margin-left: auto; font-size: 1.6rem; }
+
+.quiz-progress {
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--bg-accent-muted);
+  white-space: nowrap;
+}
+
+.quiz-progress[hidden] { display: none; }
+
+.quiz-bar {
+  height: 4px;
+  margin-top: 12px;
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+
+.quiz-bar[hidden] { display: none; }
+
+.quiz-bar-fill {
+  height: 100%;
+  width: 0;
+  background: var(--bg-accent);
+  border-radius: var(--radius-pill);
+  transition: width 0.28s ease;
+}
+
+/* ── Body ── */
+.quiz-body {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  flex: 1;
+  padding: 24px 0 8px;
+}
+
+.quiz-question {
+  font-family: var(--font-heading);
+  font-size: 1.6rem;
+  font-weight: 400;
+  line-height: 1.25;
+  color: #ffffff;
+  margin-bottom: 8px;
+}
+
+/* Focused programmatically on every step change so the new question is announced; the ring
+   would read as an error state on a heading nobody clicked. */
+.quiz-question:focus { outline: none; }
+.quiz-question:focus-visible { outline: 2px solid var(--bg-accent-muted); outline-offset: 4px; }
+
+.quiz-hint {
+  font-size: 0.92rem;
+  color: rgba(255, 255, 255, 0.66);
+  margin-bottom: 4px;
+}
+
+.quiz-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.quiz-option {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 58px;
+  padding: 15px 18px;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  line-height: 1.45;
+  color: #ffffff;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.08);
+  border: 2px solid rgba(255, 255, 255, 0.16);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: background 0.18s, border-color 0.18s, transform 0.12s;
+}
+
+.quiz-option:hover {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.34);
+}
+
+.quiz-option:focus-visible {
+  outline: none;
+  border-color: var(--bg-accent-muted);
+  box-shadow: 0 0 0 3px rgba(210, 163, 45, 0.35);
+}
+
+.quiz-option:active { transform: scale(0.99); }
+
+/* Held for the ~180ms between the tap and the next question, so the choice is visibly
+   registered before the screen changes. */
+.quiz-option.is-chosen {
+  background: rgba(210, 163, 45, 0.20);
+  border-color: var(--bg-accent);
+}
+
+/* ── Info-collection form ── */
+/* .field, .consent, .hp, .req and .sr-only are the tester-signup styles from further up this
+   file. They were written for white text on a dark panel, which is exactly this overlay, so
+   the form markup reuses them as-is. */
+.quiz-form { margin-top: 18px; }
+
+.quiz-form-sub {
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.72);
+  margin-bottom: 20px;
+}
+
+.quiz-optional {
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: none;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.quiz-submit {
+  width: 100%;
+  margin-top: 4px;
+  border: 2px solid var(--bg-accent);
+}
+
+.quiz-submit:disabled {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.45);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.quiz-submit:disabled:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow: none;
+}
+
+.quiz-privacy {
+  margin-top: 14px;
+  font-size: 0.78rem;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.5);
+  text-align: center;
+}
+
+.quiz-privacy a { color: rgba(255, 255, 255, 0.72); text-decoration: underline; }
+.quiz-privacy a:hover { color: #ffffff; }
+
+.quiz-form-status {
+  margin-top: 12px;
+  font-size: 0.88rem;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.quiz-form-status:empty { margin-top: 0; }
+.quiz-form-status.is-error { color: #FFC9B8; }
+
+/* ── Result ── */
+.quiz-result-eyebrow {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--bg-accent-muted);
+  margin-bottom: 10px;
+}
+
+.quiz-result-title {
+  font-family: var(--font-heading);
+  font-size: 2rem;
+  font-weight: 400;
+  line-height: 1.15;
+  color: #ffffff;
+  margin-bottom: 14px;
+}
+
+.quiz-result-title:focus { outline: none; }
+.quiz-result-title:focus-visible { outline: 2px solid var(--bg-accent-muted); outline-offset: 4px; }
+
+.quiz-result-desc {
+  font-size: 1.02rem;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+/* The result is on screen before this resolves, so a Mailchimp failure never costs the
+   payoff — this line only reports whether the email save worked. */
+.quiz-save-note {
+  margin-top: 22px;
+  padding: 14px 16px;
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius);
+}
+
+.quiz-save-note.is-error {
+  color: #FFC9B8;
+  background: rgba(255, 201, 184, 0.10);
+}
+
+.quiz-retry { margin-top: 12px; }
+
+.quiz-result-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  margin-top: 28px;
+}
+
+.quiz-retake { width: 100%; }
+
+/* .btn-ghost is styled for light backgrounds; the overlay is dark, same as .hero. */
+.quiz-overlay .btn-ghost {
+  background: rgba(255, 255, 255, 0.10);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.quiz-overlay .btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.quiz-link-btn {
+  font-family: var(--font-body);
+  font-size: 0.88rem;
+  color: rgba(255, 255, 255, 0.62);
+  background: none;
+  border: 0;
+  padding: 8px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.quiz-link-btn:hover { color: #ffffff; }
+.quiz-link-btn:focus-visible {
+  outline: 2px solid var(--bg-accent-muted);
+  outline-offset: 2px;
+  color: #ffffff;
+}
+
+/* ── Larger screens ── */
+@media (min-width: 640px) {
+  .quiz-banner-cta { font-size: 0.95rem; min-height: 48px; }
+  .quiz-shell { padding: 0 32px 48px; }
+  .quiz-question { font-size: 2rem; }
+  .quiz-result-title { font-size: 2.5rem; }
+  .quiz-result-actions { flex-direction: row; justify-content: flex-start; }
+  .quiz-retake { width: auto; }
+}
+
+/* The responsive block earlier in this file tightens the hero's top padding on phones; the
+   banner offset above has to track that smaller base or it over-pads on mobile. */
+@media (max-width: 768px) {
+  body.has-quiz-banner .hero { padding-top: calc(132px + var(--quiz-banner-h)); }
+}
+
+/* Honour a reduced-motion preference: quiz.js also drops the auto-advance delay. */
+@media (prefers-reduced-motion: reduce) {
+  .quiz-bar-fill { transition: none; }
+  .quiz-option { transition: none; }
+  .quiz-option:active { transform: none; }
+}
