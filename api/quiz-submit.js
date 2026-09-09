@@ -11,27 +11,30 @@
  * fire an automation they were not scored into.
  *
  * ── Repeat takers ────────────────────────────────────────────────────────────────────────────
- * Someone retaking the quiz is not a duplicate signup, and the brief is that Mailchimp should
- * see every result they get plus how many times they have played. Three mechanisms, on purpose:
+ * The brief: the FIRST completed attempt is someone's true type and is the only one that emails
+ * a result. Retakes are logged for our own information — count and history — but never tag a
+ * new archetype and never fire a second automation.
  *
- *   result tags   ACCUMULATE. Unlike the role tags in subscribe.js — which deactivate each
- *                 other so a contact has exactly one — every archetype a person lands on stays
- *                 active. A parent who is 'coach' then later 'zen' carries both, so a segment
- *                 for either one still finds them.
- *   QUIZLAST      the CURRENT archetype, overwritten each run. Segment on this when you want
- *                 "whatever they are now", which tags alone can no longer tell you once two
- *                 are active.
+ *   result tag    added ONLY on a first attempt (see isFirstAttempt below). A retake that lands
+ *                 on a different archetype does NOT get that archetype's tag, specifically so it
+ *                 cannot fire that automation. A contact only ever holds one result tag.
+ *   quiz-taken    added on every attempt, including retakes. This is also the FIRST-ATTEMPT
+ *                 SIGNAL: whether a contact already has it is how isFirstAttempt is decided, so
+ *                 it must never gate an automation of its own — it exists purely to remember
+ *                 "already sent a result email", and Mailchimp's tag automations only fire on a
+ *                 tag actually being added, so a repeat retake (already carrying the tag) is a
+ *                 no-op re-add.
+ *   QUIZTYPE      the archetype from the first attempt. Set once and never overwritten by a
+ *                 retake — this is "their true type" for segmenting.
  *   QUIZCOUNT     how many times they have taken it, read back and incremented per run.
- *   QUIZHIST      the ordered history, e.g. "coach,zen,coach", newest last.
+ *   QUIZHIST      the ordered history, e.g. "coach,zen,coach", newest last — every attempt,
+ *                 including retakes, so nothing about what they explored is lost.
  *
- * KNOWN LIMIT worth designing your automation around: Mailchimp fires a tag-based automation
- * when a tag is ADDED. Re-adding a tag the contact already has is a no-op, so a repeat taker
- * who lands on the SAME archetype twice will not get that email again. That is usually what you
- * want. If you ever want it to re-fire, trigger the automation off a QUIZCOUNT change instead of
- * the tag — do not make this route remove-then-re-add the tag, which would also re-fire for
- * anyone who simply refreshes.
+ * isFirstAttempt is read from whether the contact already carries the quiz-taken TAG, not from
+ * a merge field — tags always exist with no Audience configuration, so the one-email guarantee
+ * holds even before QUIZTYPE/QUIZCOUNT/QUIZHIST are set up in Mailchimp.
  *
- * The merge fields are optional: create QUIZLAST / QUIZCOUNT / QUIZHIST / QUIZVER in
+ * The merge fields are optional: create QUIZTYPE / QUIZCOUNT / QUIZHIST / QUIZVER in
  * Audience → Settings → Audience fields and |MERGE| tags to get this data. If they do not
  * exist, the upsert below quietly retries without them and tagging still works.
  *
@@ -59,7 +62,7 @@ const quiz = require('../quiz-config');
 const MERGE_FIRST_NAME = 'FNAME';
 const MERGE_LAST_NAME = 'LNAME';
 const MERGE_ROLE = 'ROLE';
-const MERGE_QUIZ_LAST = 'QUIZLAST';
+const MERGE_QUIZ_TYPE = 'QUIZTYPE';
 const MERGE_QUIZ_COUNT = 'QUIZCOUNT';
 const MERGE_QUIZ_HISTORY = 'QUIZHIST';
 const MERGE_QUIZ_VERSION = 'QUIZVER';
@@ -266,10 +269,19 @@ module.exports = async function handler(req, res) {
       emailPermissionIds(base, auth, audienceId),
       // Read before write so the run count increments instead of resetting, and so we can tell
       // an established contact's role apart from a blank one.
-      getMember(config, hash, 'merge_fields,status,created_at'),
+      getMember(config, hash, 'merge_fields,status,created_at,tags'),
     ]);
 
     const existingMerge = (existing && existing.merge_fields) || {};
+
+    // The one thing that decides whether this run emails a result. Based on the quiz-taken TAG,
+    // not a merge field, so it holds even before QUIZTYPE/QUIZCOUNT/QUIZHIST exist in the
+    // Audience — see the "Repeat takers" note at the top of this file.
+    const isFirstAttempt = !(
+      existing &&
+      Array.isArray(existing.tags) &&
+      existing.tags.some((t) => t.name === TAKEN_TAG)
+    );
 
     // Split into two objects so a Mailchimp audience without the quiz merge fields can still
     // record the signup: if the upsert complains, we retry with `baseMerge` only.
@@ -280,11 +292,12 @@ module.exports = async function handler(req, res) {
     );
 
     const quizMerge = {
-      [MERGE_QUIZ_LAST]: result.id,
       [MERGE_QUIZ_COUNT]: nextCount(existingMerge[MERGE_QUIZ_COUNT]),
       [MERGE_QUIZ_HISTORY]: appendHistory(existingMerge[MERGE_QUIZ_HISTORY], result.id),
       [MERGE_QUIZ_VERSION]: quiz.QUIZ.version,
     };
+    // Locked in on the first attempt only — a retake must never overwrite someone's true type.
+    if (isFirstAttempt) quizMerge[MERGE_QUIZ_TYPE] = result.id;
 
     // PUT upserts, so a repeat taker gets updated instead of a "Member Exists" 400.
     // `status` is deliberately omitted: only `status_if_new` is sent, so retaking the quiz can
@@ -332,7 +345,7 @@ module.exports = async function handler(req, res) {
       if (/merge/i.test(detail)) {
         console.error(
           'Mailchimp rejected the quiz merge fields, retrying without them. ' +
-            'Create QUIZLAST/QUIZCOUNT/QUIZHIST/QUIZVER in the audience to capture this data:',
+            'Create QUIZTYPE/QUIZCOUNT/QUIZHIST/QUIZVER in the audience to capture this data:',
           detail
         );
         payload.merge_fields = baseMerge;
@@ -410,17 +423,16 @@ module.exports = async function handler(req, res) {
     }
 
     // Tags in a PUT body are only honored when the member is created, so this separate call is
-    // what keeps repeat takers tagged. Only ACTIVE tags are sent — no result tag is ever
-    // deactivated, so every archetype a person has landed on stays on their record.
+    // what tags a repeat taker at all. The result tag is added ONLY on a first attempt — that is
+    // what stops a retake into a different archetype from firing that automation too. quiz-taken
+    // is added every time, which is a no-op re-add on a retake (it is already active).
+    const tags = [{ name: TAKEN_TAG, status: 'active' }];
+    if (isFirstAttempt) tags.push({ name: result.tag, status: 'active' });
+
     const tagged = await fetch(`${base}/lists/${audienceId}/members/${hash}/tags`, {
       method: 'POST',
       headers: { Authorization: auth, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        tags: [
-          { name: TAKEN_TAG, status: 'active' },
-          { name: result.tag, status: 'active' },
-        ],
-      }),
+      body: JSON.stringify({ tags }),
     });
 
     // Tagging drives the automation, so a failure here matters more than it does on the signup
