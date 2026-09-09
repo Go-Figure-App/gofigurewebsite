@@ -17,6 +17,8 @@
   --bg-accent:       #D2A32D;            /* CTA gold fill */
   --bg-accent-hover: #c0942a;            /* CTA hover */
   --bg-accent-muted: #E4C881;            /* muted/pending CTA */
+  --bg-cta-tester:       #A88324;        /* "Get Tester Access" fill — deliberately darker than --bg-accent */
+  --bg-cta-tester-hover: #9A7821;        /* "Get Tester Access" hover */
   --bg-surface:      rgba(128,128,128,0.10); /* chips, inputs */
   --bg-selected:     rgba(194,163,181,0.40); /* selected nav/chip */
   --plum:            #7A5269;                /* lighter mauve-plum accent (header) */
@@ -122,6 +124,17 @@ body {
   background: var(--bg-accent-hover);
   border-color: var(--bg-accent-hover);
   box-shadow: var(--shadow-lift);
+}
+
+/* "Get Tester Access" — the site's one conversion action, deliberately a shade darker than
+   the rest of the gold system (banner, quiz CTA) so it stands out as the primary ask. */
+.btn-tester {
+  background: var(--bg-cta-tester);
+  border-color: var(--bg-cta-tester);
+}
+.btn-tester:hover {
+  background: var(--bg-cta-tester-hover);
+  border-color: var(--bg-cta-tester-hover);
 }
 
 /* Alias kept for any .btn-primary usage */
