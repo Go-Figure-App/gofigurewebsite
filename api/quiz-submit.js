@@ -1,5 +1,6 @@
 /**
- * POST /api/quiz-submit — records a "What type of skating parent are you?" result in Mailchimp.
+ * POST /api/quiz-submit — records a "What type of skating coach or parent are you?" result in
+ * Mailchimp.
  *
  * Same single opt-in posture as api/subscribe.js: contacts are created as 'subscribed' with no
  * confirmation email, which is only defensible because the quiz form carries an explicit,
@@ -71,11 +72,15 @@ const MERGE_QUIZ_VERSION = 'QUIZVER';
 const TAKEN_TAG = 'quiz-taken';
 
 /**
- * The quiz is explicitly about being a skating parent, so a brand-new contact is one. But an
- * existing Coach who takes it for fun must not be relabelled, so this is only written when the
- * contact has no role on file. See applyRole below.
+ * The quiz's first question ("I am a: Parent / Coach") tells us which the taker is, so a
+ * brand-new contact is labelled from that answer's branch. But an existing contact who takes
+ * the quiz for the other role must not be relabelled, so this is only written when the contact
+ * has no role on file. See applyRole below.
  */
-const IMPLIED_ROLE = 'Parent of Skater';
+const IMPLIED_ROLE_BY_FLOW = {
+  parent: 'Parent of Skater',
+  coach: 'Coach',
+};
 
 /** Must match the dropdown choices in Mailchimp exactly, or the value is rejected. */
 const KNOWN_ROLES = ['Coach', 'Parent of Skater', 'Adult Skater (18+)', 'Other'];
@@ -184,14 +189,14 @@ function nextCount(existing) {
 }
 
 /**
- * Only claims the contact as a parent when Mailchimp has no role for them. An existing Coach or
- * Adult Skater keeps the role they chose; a contact with a blank or unrecognized role gets the
- * one the quiz implies.
+ * Only claims the contact as the role their quiz answer implies when Mailchimp has no role for
+ * them. An existing Coach, Parent, or Adult Skater keeps the role they chose; a contact with a
+ * blank or unrecognized role gets the one the quiz's "I am a:" answer implies.
  */
-function applyRole(existingMergeFields) {
+function applyRole(existingMergeFields, impliedRole) {
   const current = clean((existingMergeFields || {})[MERGE_ROLE], 100);
   if (KNOWN_ROLES.includes(current)) return {};
-  return { [MERGE_ROLE]: IMPLIED_ROLE };
+  return impliedRole ? { [MERGE_ROLE]: impliedRole } : {};
 }
 
 module.exports = async function handler(req, res) {
@@ -288,7 +293,7 @@ module.exports = async function handler(req, res) {
     const baseMerge = Object.assign(
       {},
       nameFields(firstName, lastName),
-      applyRole(existingMerge)
+      applyRole(existingMerge, IMPLIED_ROLE_BY_FLOW[result.flow])
     );
 
     const quizMerge = {

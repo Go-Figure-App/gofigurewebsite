@@ -118,18 +118,19 @@
           </div>
         </div>
 
-        <!-- Permanent entry point for the skating-parent quiz. The sticky banner is
+        <!-- Permanent entry point for the coach-or-parent quiz. The sticky banner is
              dismissable and only lasts a session, so this is what a returning visitor sees.
-             It sits under the "Parents — Coming soon" card on purpose: that card names the
-             quiz's exact audience and otherwise gives them nothing to act on.
+             It sits under the "Parents — Coming soon" card on purpose: that card names one of
+             the quiz's audiences and otherwise gives them nothing to act on.
 
              This copy is page content, so it lives here alongside the rest of the homepage.
-             Everything *inside* the quiz — questions, results, tags — comes from
-             quiz-config.js. The href is the no-JS fallback; quiz.js intercepts the click. -->
+             Everything *inside* the quiz — the role question, branch questions, results,
+             tags — comes from quiz-config.js. The href is the no-JS fallback; quiz.js
+             intercepts the click. -->
         <div class="quiz-cta">
           <div class="quiz-cta-copy">
-            <h3 class="quiz-cta-title">What type of skating parent are you?</h3>
-            <p class="quiz-cta-sub">Two questions, about 30 seconds. Be first to know when the parent experience is ready.</p>
+            <h3 class="quiz-cta-title">What type of skating coach or parent are you?</h3>
+            <p class="quiz-cta-sub">Three questions, about 30 seconds. Be first to know when the parent experience is ready.</p>
           </div>
           <a href="?quiz=open" class="btn btn-ice quiz-cta-btn" data-quiz-open>Take the quiz</a>
         </div>

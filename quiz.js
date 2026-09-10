@@ -1,8 +1,14 @@
 /**
- * quiz.js — the "What type of skating parent are you?" banner and full-screen quiz.
+ * quiz.js — the "What type of skating coach or parent are you?" banner and full-screen quiz.
  *
  * Every string, question, result and Mailchimp tag comes from quiz-config.js. Nothing in this
  * file needs editing to change copy, add a question or add an archetype.
+ *
+ * The first question is always QUIZ.roleQuestion ("I am a: Parent / Coach"); its answer picks
+ * which of QUIZ.flows the remaining questions come from. Both branches are assumed to have the
+ * same question count (quiz-config.js's validate() checks this), so `state.step` can address
+ * "the role question, then N flow questions" without the progress bar needing to know which
+ * branch is active.
  *
  * Builds its own DOM rather than expecting markup in the page, so each HTML file only needs the
  * two script tags — nothing to keep in sync across index/privacy/terms.
@@ -131,15 +137,17 @@
   /* ─── State ──────────────────────────────────────────────────────────────── */
 
   /**
-   * `step` is an index into the questions array; once it reaches questions.length the flow moves
-   * to 'form' (or straight to 'result' for a remembered taker). Held in memory rather than
-   * storage: closing the overlay keeps your place for this pageview, a reload starts fresh.
+   * `step` 0 is always the role question; steps 1..N are questions[step - 1] of whichever flow
+   * `state.flowKey` names. Once step reaches totalQuestionSteps() the flow moves to 'form' (or
+   * straight to 'result' for a remembered taker). Held in memory rather than storage: closing
+   * the overlay keeps your place for this pageview, a reload starts fresh.
    */
   var state = {
     open: false,
     step: 0,
     screen: 'question', // 'question' | 'form' | 'result'
-    answers: [], // option ids, index-aligned to QUIZ.questions
+    flowKey: null, // 'parent' | 'coach' | null until the role question is answered
+    answers: [], // option ids: [roleOptionId, ...flow question option ids], index-aligned to step
     result: null, // the scored result object once known
     submitting: false,
     /** null | 'saved' | 'pending' | 'blocked' | 'failed' — drives the note on the result screen. */
@@ -407,20 +415,55 @@
     return state.forceForm || !rememberedContact();
   }
 
+  function activeFlow() {
+    return state.flowKey ? QUIZ.flows[state.flowKey] : null;
+  }
+
   /**
-   * Steps shown in the progress indicator: one per question, plus the sign-up step when it is
-   * going to be shown. A remembered taker sees "Question 1 of 2", not a phantom third step.
+   * The current question's copy: the role question at step 0, otherwise the active flow's
+   * question at step - 1. Every branch has the same question count (quiz-config.js's validate()
+   * checks this), so this only needs the active flow once step > 0.
+   */
+  function questionForStep(step) {
+    if (step === 0) return QUIZ.roleQuestion;
+    var flow = activeFlow();
+    return flow && flow.questions[step - 1];
+  }
+
+  /** Role question + however many questions a flow branch has (both branches match). */
+  function totalQuestionSteps() {
+    return 1 + QUIZ.flows[Object.keys(QUIZ.flows)[0]].questions.length;
+  }
+
+  /**
+   * Steps shown in the progress indicator: the role question, each flow question, plus the
+   * sign-up step when it is going to be shown. A remembered taker sees "Question 1 of 3", not a
+   * phantom extra step.
    */
   function totalSteps() {
-    return QUIZ.questions.length + (needsForm() ? 1 : 0);
+    return totalQuestionSteps() + (needsForm() ? 1 : 0);
   }
 
   function chooseOption(questionIndex, optionId) {
+    if (questionIndex === 0) {
+      var chosenRoleOption = QUIZ.roleQuestion.options.filter(function (option) {
+        return option.id === optionId;
+      })[0];
+      var newFlowKey = chosenRoleOption && chosenRoleOption.flow;
+      // Changing the role answer (including on a "Back" from further in) invalidates any
+      // flow-question answers already given for the OTHER branch, so drop them rather than
+      // letting a stale coach answer score a parent submission or vice versa.
+      if (newFlowKey !== state.flowKey) {
+        state.flowKey = newFlowKey;
+        state.answers = [];
+      }
+    }
+
     state.answers[questionIndex] = optionId;
     render(); // paints the selected state before the advance below
 
     var advance = function () {
-      if (questionIndex + 1 < QUIZ.questions.length) {
+      if (questionIndex + 1 < totalQuestionSteps()) {
         state.step = questionIndex + 1;
         state.screen = 'question';
       } else if (needsForm()) {
@@ -444,10 +487,10 @@
       // Back from the result returns to the last question rather than the form, so they can
       // change an answer; the form (if any) will be offered again on the way forward.
       state.screen = 'question';
-      state.step = QUIZ.questions.length - 1;
+      state.step = totalQuestionSteps() - 1;
     } else if (state.screen === 'form') {
       state.screen = 'question';
-      state.step = QUIZ.questions.length - 1;
+      state.step = totalQuestionSteps() - 1;
     } else if (state.step > 0) {
       state.step -= 1;
     }
@@ -457,6 +500,7 @@
   function resetQuiz() {
     state.step = 0;
     state.screen = 'question';
+    state.flowKey = null;
     state.answers = [];
     state.result = null;
     state.submitting = false;
@@ -557,7 +601,7 @@
 
   function renderQuestion() {
     var index = state.step;
-    var question = QUIZ.questions[index];
+    var question = questionForStep(index);
     var chosen = state.answers[index];
 
     var heading = el('h2', {
@@ -822,7 +866,7 @@
       current = totalSteps();
     } else if (state.screen === 'form') {
       children = renderForm();
-      current = QUIZ.questions.length + 1;
+      current = totalQuestionSteps() + 1;
     } else {
       children = renderQuestion();
       current = state.step + 1;

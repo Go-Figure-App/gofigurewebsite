@@ -57,20 +57,23 @@ Run `npx vercel build` and look at `.vercel/output/` to see exactly what is serv
 under `static/` are public, `functions/` are compiled. Worth doing before adding any file
 you are unsure about.
 
-## Skating-parent quiz
+## Skating coach-or-parent quiz
 
-A slim sticky banner on every page opens a full-screen, two-question quiz that scores the
-visitor into one of six parent archetypes, collects an email, and tags the contact in
-Mailchimp so an automation can follow up. Most traffic arrives by QR code at a rink, so
-`?quiz=open` on any URL skips the banner and opens the quiz immediately — that is what the
-printed codes link to.
+A slim sticky banner on every page opens a full-screen quiz. The first question, "I am a:
+Parent / Coach", picks one of two branches (`QUIZ.flows.parent` / `QUIZ.flows.coach` in
+`quiz-config.js`), each a self-contained two-question quiz that scores the visitor into one of
+four archetypes for that role, collects an email, and tags the contact in Mailchimp so an
+automation can follow up. Most traffic arrives by QR code at a rink, so `?quiz=open` on any URL
+skips the banner and opens the quiz immediately — that is what the printed codes link to.
 
-**All copy lives in `quiz-config.js`.** Questions, answers, point weights, result titles and
-descriptions, tie-break order and Mailchimp tags are one exported object. Editing copy, adding
-a question or adding an archetype needs no changes to `quiz.js` or `api/quiz-submit.js`; the
-progress indicator, scoring and tie-break all read the arrays. The file validates itself on
-load and logs any problem to the console — a weight pointing at a deleted archetype, a result
-missing from the tie-break, a duplicated option id.
+**All copy lives in `quiz-config.js`.** The role question, both branches' questions and
+answers, result titles and descriptions, the resultMatrix scoring lookup, and Mailchimp tags
+are one exported object. Editing copy, adding a question or adding an archetype within a branch
+needs no changes to `quiz.js` or `api/quiz-submit.js`; the progress indicator and scoring both
+read the arrays, and both branches are expected to have the same question count. The file
+validates itself on load and logs any problem to the console — a resultMatrix cell pointing at
+a deleted archetype, a result never produced by resultMatrix, a duplicated option id (option ids
+must be unique across both branches, not just within one).
 
 The browser scores locally only so it can show a result instantly. `api/quiz-submit.js`
 **re-scores the submitted answers server-side** and applies the tag it computed, so a crafted
