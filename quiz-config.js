@@ -239,7 +239,7 @@
           },
           {
             id: 'all-inclusive',
-            title: 'The All Inclusive (aka Second Mom)',
+            title: 'The All Inclusive',
             body:
               'You’re the whole package! You will do anything for your students if it will help them skate. That includes a million thankless jobs off the ice: doing hair and makeup, looking up skaters’ USFS number and test history, running off ice, lending gloves and hair ties, coordinating amongst the parents, and setting up sessions with specialists and choreographers. Your students and their families don’t just get a coach, they get someone who genuinely holds the whole experience together.\n\n' +
               'Where it gets hard: with this much ground to cover, it’s tough to find time to communicate with the parents as much as they’d like. Sure, they’re footing the bill, but the skater is your primary concern and you need the parents to sit back into their support role and trust your process.',
